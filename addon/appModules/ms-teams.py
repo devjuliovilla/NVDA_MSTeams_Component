@@ -13,7 +13,7 @@ import config
 import gui
 import ui
 import wx
-from controlTypes import Role
+from controlTypes import Role, State
 from gui import guiHelper
 from keyboardHandler import KeyboardInputGesture
 from logHandler import log
@@ -44,6 +44,13 @@ MAX_MY_NAME_SCAN = 30
 
 # Segundos entre pulsaciones para contar como doble pulsación.
 REPEAT_WINDOW = 0.5
+
+# Esperas al manejar menús de Teams (milisegundos).
+FOCUS_DELAY_MS = 150
+MENU_POLL_MS = 100
+MENU_POLL_ATTEMPTS = 20
+# Texto de la opción del menú contextual de un adjunto (Teams en español).
+DOWNLOAD_ITEM_NAME = "Descargar"
 
 SCRIPT_CATEGORY = "Teams Chat"
 
@@ -240,9 +247,9 @@ def _openUrl(url):
 	os.startfile(url)
 
 
-def _downloadUrl(url):
-	# SharePoint y OneDrive descargan el archivo en vez de mostrarlo con download=1.
-	return url + ("&" if "?" in url else "?") + "download=1"
+def _sendKey(name):
+	"""Envía una tecla directamente a Teams, sin pasar por los atajos de NVDA."""
+	KeyboardInputGesture.fromName(name).send()
 
 
 class MessageActionsDialog(wx.Dialog):
@@ -279,6 +286,7 @@ class AppModule(appModuleHandler.AppModule):
 		**{f"kb:alt+numLockNumpad{i}": f"readMessage{i}" for i in range(10)},
 		**{f"kb:NVDA+alt+{i}": f"messageActions{i}" for i in range(10)},
 		**{f"kb:NVDA+alt+numLockNumpad{i}": f"messageActions{i}" for i in range(10)},
+		"kb:NVDA+alt+e": "focusComposeBox",
 	}
 
 	def __init__(self, *args, **kwargs):
@@ -304,15 +312,20 @@ class AppModule(appModuleHandler.AppModule):
 		return script
 
 	def _currentDocName(self):
-		ti = getattr(api.getFocusObject(), "treeInterceptor", None)
-		try:
-			return ti.rootNVDAObject.name if ti else None
-		except Exception:
-			return None
+		"""Título del documento de Teams (cambia al cambiar de chat)."""
+		obj = api.getFocusObject()
+		for _ in range(MAX_ANCESTOR_DEPTH):
+			if obj is None:
+				return None
+			if _role(obj) == Role.DOCUMENT:
+				return _name(obj) or None
+			obj = obj.parent
+		return None
 
 	def _findChatList(self):
 		"""Devuelve (lista, método usado) o (None, None)."""
 		pane = None
+		docName = None
 		for start in (api.getFocusObject(), api.getNavigatorObject()):
 			obj = start
 			for _ in range(MAX_ANCESTOR_DEPTH):
@@ -323,8 +336,10 @@ class AppModule(appModuleHandler.AppModule):
 					return self._remember(obj), "ancestro"
 				if domId == MESSAGE_PANE_ID and pane is None:
 					pane = obj
+				# De paso, el título del documento para validar la caché.
+				if docName is None and _role(obj) == Role.DOCUMENT:
+					docName = _name(obj) or None
 				obj = obj.parent
-		docName = self._currentDocName()
 		cached = self._cachedChatList
 		if cached is not None and docName and docName == self._cachedDocName and _domId(cached) == CHAT_LIST_ID:
 			return cached, "caché"
@@ -454,12 +469,12 @@ class AppModule(appModuleHandler.AppModule):
 		default = config.conf[CONF_SECTION]["attachmentAction"]
 		first, middle, rest = [], [], []
 		for att in msg.attachments:
-			options = [("viewer", "abrir en el visor de Teams", partial(self._openInViewer, att))]
+			options = [
+				("viewer", "abrir en el visor de Teams", partial(self._openInViewer, att)),
+				("download", "descargar", partial(self._downloadAttachment, att)),
+			]
 			if att.url:
-				options += [
-					("browser", "abrir en el navegador", partial(_openUrl, att.url)),
-					("download", "descargar", partial(_openUrl, _downloadUrl(att.url))),
-				]
+				options.append(("browser", "abrir en el navegador", partial(_openUrl, att.url)))
 			for key, label, func in options:
 				(first if key == default else rest).append((f"Adjunto: {att.name} - {label}", func))
 			if att.url:
@@ -499,23 +514,92 @@ class AppModule(appModuleHandler.AppModule):
 		ui.message(confirmation)
 
 	def _openInViewer(self, att):
-		# Pulsar el adjunto como si se hiciera clic: primero el grupo del adjunto,
-		# después la sección que contiene su nombre y dirección.
-		withUrl = _findDescendant(att.obj, lambda o: bool(URL_RE.search(_name(o))), 6)
-		for candidate in (att.obj, withUrl):
-			if candidate is None:
-				continue
+		# Igual que a mano: el adjunto se puede enfocar y su descripción dice
+		# "Presione Entrar para abrir el archivo".
+		att.obj.setFocus()
+		wx.CallLater(FOCUS_DELAY_MS, _sendKey, "enter")
+
+	def _downloadAttachment(self, att):
+		# Igual que a mano: menú contextual del adjunto y opción "Descargar",
+		# que Teams guarda directamente en la carpeta de descargas.
+		att.obj.setFocus()
+		wx.CallLater(FOCUS_DELAY_MS, _sendKey, "shift+f10")
+		wx.CallLater(FOCUS_DELAY_MS + MENU_POLL_MS, self._clickMenuItem, DOWNLOAD_ITEM_NAME, MENU_POLL_ATTEMPTS)
+
+	def _clickMenuItem(self, wanted, attemptsLeft):
+		"""Espera a que se abra el menú y pulsa la opción cuyo nombre empieza por wanted."""
+		focus = api.getFocusObject()
+		if _role(focus) != Role.MENUITEM:
+			if attemptsLeft > 0:
+				wx.CallLater(MENU_POLL_MS, self._clickMenuItem, wanted, attemptsLeft - 1)
+			else:
+				log.info(f"teamsChat: no se abrió el menú; foco en {_role(focus)} {_name(focus)!r}")
+				ui.message("No se abrió el menú del adjunto")
+			return
+		menu = focus.parent
+		item = _findDescendant(
+			menu,
+			lambda o: _role(o) == Role.MENUITEM and _name(o).strip().lower().startswith(wanted.lower()),
+			3,
+		)
+		if item is None:
+			names = [_name(o) for o in _children(menu)]
+			log.info(f"teamsChat: opción {wanted!r} no encontrada; menú: {names!r}")
+			ui.message(f"No se encontró la opción {wanted}. Elígela en el menú.")
+			return
+		log.info(f"teamsChat: pulsando opción de menú {_name(item)!r}")
+		try:
+			item.doAction()
+		except Exception:
+			log.info("teamsChat: doAction falló, uso Intro", exc_info=True)
+			item.setFocus()
+			wx.CallLater(FOCUS_DELAY_MS, _sendKey, "enter")
+
+	def _focusComposeBox(self):
+		box = self._findComposeBox()
+		if box is None:
+			ui.message("No se encontró el cuadro de redacción. Abre un chat.")
+			return
+		box.setFocus()
+
+	def _findComposeBox(self):
+		"""El cuadro de redacción es el campo editable multilínea del panel del chat,
+		fuera de la lista de mensajes."""
+		pane = self._findMessagePane()
+		if pane is None:
+			log.info("teamsChat: panel del chat no encontrado")
+			return None
+		queue = [pane]
+		visited = 0
+		while queue and visited < MAX_PANE_NODES:
+			node = queue.pop(0)
+			visited += 1
+			if _domId(node) == CHAT_LIST_ID:
+				continue  # No recorrer los mensajes.
 			try:
-				candidate.doAction()
-				log.info(f"teamsChat: adjunto pulsado: {_name(candidate)[:60]!r}")
-				return
+				states = node.states
 			except Exception:
-				log.info("teamsChat: el adjunto no admite pulsación", exc_info=True)
-		if att.url:
-			ui.message("No se pudo abrir en el visor de Teams. Abriendo en el navegador.")
-			_openUrl(att.url)
-		else:
-			ui.message("No se pudo abrir el adjunto")
+				states = set()
+			if State.EDITABLE in states and State.MULTILINE in states:
+				return node
+			queue.extend(_children(node))
+		log.info(f"teamsChat: cuadro de redacción no encontrado tras {visited} nodos")
+		return None
+
+	def _findMessagePane(self):
+		"""Contenedor común de la lista de mensajes y el cuadro de redacción."""
+		starts = [api.getFocusObject()]
+		chatList, _method = self._findChatList()
+		if chatList is not None:
+			starts.append(chatList)
+		for obj in starts:
+			for _ in range(MAX_ANCESTOR_DEPTH):
+				if obj is None:
+					break
+				if _domId(obj) == MESSAGE_PANE_ID:
+					return obj
+				obj = obj.parent
+		return None
 
 	def _openMessageMenu(self, msg):
 		# Enfocar antes el mensaje: Teams solo muestra su barra de opciones
@@ -574,3 +658,9 @@ for _i in range(10):
 		lambda self, i=_i: self._showMessageActions(i),
 	))
 del _i
+
+AppModule.script_focusComposeBox = _makeScript(
+	"focusComposeBox",
+	"Lleva el foco al cuadro de redacción del chat abierto.",
+	lambda self: self._focusComposeBox(),
+)

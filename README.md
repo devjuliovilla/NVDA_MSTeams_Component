@@ -4,7 +4,7 @@ Complemento para el lector de pantalla [NVDA](https://www.nvaccess.org/) que fac
 
 Permite leer los últimos mensajes de un chat sin mover el foco ni buscarlos con el ratón, copiarlos y abrir sus enlaces y archivos adjuntos desde una ventana accesible.
 
-> Estado: en desarrollo (versión 0.1.3). La lectura y la copia de mensajes funcionan. La ventana de acciones, los enlaces y los adjuntos están en pruebas.
+> Estado: en desarrollo (versión 0.1.4). Funcionan la lectura y la copia de mensajes, la ventana de acciones, los enlaces, el menú de opciones de Teams y abrir adjuntos en el navegador. Están en pruebas: abrir adjuntos en el visor de Teams, descargarlos y el atajo para ir al cuadro de redacción.
 
 ## Características
 
@@ -13,7 +13,8 @@ Permite leer los últimos mensajes de un chat sin mover el foco ni buscarlos con
 - **Respuestas con cita:** primero se lee el mensaje y después la cita: "Ana: de acuerdo. Mensaje citado de Luis: …".
 - **Archivos adjuntos:** se anuncian al leer el mensaje: "Ana: te paso el informe. Adjunto: informe.pdf".
 - **Copiar un mensaje** pulsando su atajo dos veces seguidas. Si el mensaje solo tiene un adjunto, copia la dirección del archivo.
-- **Ventana de acciones del mensaje:** copiar el texto, abrir el menú de opciones de Teams, abrir o copiar enlaces, y abrir, descargar o copiar la dirección de los archivos adjuntos.
+- **Ventana de acciones del mensaje:** copiar el texto, abrir el menú de opciones de Teams, abrir o copiar enlaces, y abrir, descargar o copiar la dirección de los archivos adjuntos. La descarga usa el menú contextual del propio Teams, así que el archivo va directo a tu carpeta de descargas.
+- **Ir al cuadro de redacción** desde cualquier parte del chat con un atajo.
 - **Solo actúa en Teams.** En el resto de aplicaciones NVDA funciona exactamente igual que siempre.
 
 ## Atajos de teclado
@@ -25,6 +26,7 @@ Todos funcionan dentro de Teams, con la fila superior de números o con el tecla
 | Alt+0 a Alt+9 | Lee el mensaje indicado: 0 es el último, 9 el décimo desde abajo |
 | Alt+número dos veces seguidas | Copia el texto del mensaje al portapapeles |
 | NVDA+Alt+0 a NVDA+Alt+9 | Abre la ventana de acciones del mensaje |
+| NVDA+Alt+E | Lleva el foco al cuadro de redacción del chat |
 
 En la ventana de acciones, las flechas recorren la lista, Intro ejecuta la acción seleccionada y Escape cierra sin hacer nada.
 
