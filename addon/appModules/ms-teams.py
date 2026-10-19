@@ -1,20 +1,28 @@
 # Teams Chat: módulo de aplicación para el nuevo Microsoft Teams (ms-teams.exe).
 # Solo se carga cuando Teams está activo, así que no afecta al resto de NVDA.
 
+import os
 import re
 import time
+from collections import namedtuple
+from functools import partial
 
 import api
 import appModuleHandler
 import config
+import gui
 import ui
+import wx
 from controlTypes import Role
+from gui import guiHelper
 from keyboardHandler import KeyboardInputGesture
 from logHandler import log
 
+# Mantener igual que en globalPlugins/teamsChat.py.
 CONF_SECTION = "teamsChat"
 config.conf.spec[CONF_SECTION] = {
 	"numpadGestures": "boolean(default=True)",
+	"attachmentAction": "option('viewer', 'browser', 'download', default='browser')",
 }
 
 # Identificadores del DOM de Teams, obtenidos explorando la interfaz real.
@@ -118,6 +126,9 @@ def _cleanText(parts):
 
 URL_RE = re.compile(r"https?://\S+")
 
+# obj es el elemento del adjunto en Teams (para abrirlo en el visor).
+Attachment = namedtuple("Attachment", "name url obj")
+
 
 class ChatMessage:
 	def __init__(
@@ -139,7 +150,7 @@ class ChatMessage:
 		author = "Tú" if self.isMine else (self.author or "Desconocido")
 		parts = [self.text] if self.text else []
 		if self.attachments:
-			names = ", ".join(name for name, _url in self.attachments)
+			names = ", ".join(att.name for att in self.attachments)
 			label = "Adjunto" if len(self.attachments) == 1 else f"{len(self.attachments)} adjuntos"
 			parts.append(f"{label}: {names}")
 		speech = f"{author}: {'. '.join(parts) or 'mensaje sin texto'}"
@@ -217,8 +228,37 @@ def _parseAttachments(body, msgId):
 			continue
 		withUrl = _findDescendant(item, lambda o: bool(URL_RE.search(_name(o))), 6)
 		match = URL_RE.search(_name(withUrl)) if withUrl else None
-		attachments.append((name, match.group(0) if match else None))
+		attachments.append(Attachment(name, match.group(0) if match else None, item))
 	return attachments
+
+
+def _openUrl(url):
+	# Solo direcciones web: nunca ejecutar otra cosa que venga del chat.
+	if not URL_RE.match(url or ""):
+		ui.message("Dirección no válida")
+		return
+	os.startfile(url)
+
+
+def _downloadUrl(url):
+	# SharePoint y OneDrive descargan el archivo en vez de mostrarlo con download=1.
+	return url + ("&" if "?" in url else "?") + "download=1"
+
+
+class MessageActionsDialog(wx.Dialog):
+	def __init__(self, parent, summary, labels):
+		super().__init__(parent, title="Acciones del mensaje")
+		mainSizer = wx.BoxSizer(wx.VERTICAL)
+		helper = guiHelper.BoxSizerHelper(self, orientation=wx.VERTICAL)
+		self.actionsList = helper.addLabeledControl(summary, wx.ListBox, choices=labels)
+		self.actionsList.SetSelection(0)
+		self.actionsList.Bind(wx.EVT_LISTBOX_DCLICK, lambda evt: self.EndModal(wx.ID_OK))
+		helper.addDialogDismissButtons(self.CreateButtonSizer(wx.OK | wx.CANCEL))
+		mainSizer.Add(helper.sizer, border=guiHelper.BORDER_FOR_DIALOGS, flag=wx.ALL)
+		self.SetSizer(mainSizer)
+		mainSizer.Fit(self)
+		self.actionsList.SetFocus()
+		self.CentreOnScreen()
 
 
 def _iterMessages(chatList):
@@ -237,8 +277,8 @@ class AppModule(appModuleHandler.AppModule):
 	__gestures = {
 		**{f"kb:alt+{i}": f"readMessage{i}" for i in range(10)},
 		**{f"kb:alt+numLockNumpad{i}": f"readMessage{i}" for i in range(10)},
-		**{f"kb:NVDA+alt+{i}": f"messageMenu{i}" for i in range(10)},
-		**{f"kb:NVDA+alt+numLockNumpad{i}": f"messageMenu{i}" for i in range(10)},
+		**{f"kb:NVDA+alt+{i}": f"messageActions{i}" for i in range(10)},
+		**{f"kb:NVDA+alt+numLockNumpad{i}": f"messageActions{i}" for i in range(10)},
 	}
 
 	def __init__(self, *args, **kwargs):
@@ -383,7 +423,7 @@ class AppModule(appModuleHandler.AppModule):
 		if presses == 2 and last[3] is not None:
 			msg = last[3]
 			# Sin texto (solo adjuntos): copiar las direcciones de los adjuntos.
-			toCopy = msg.text or "\n".join(url for _file, url in msg.attachments if url)
+			toCopy = msg.text or "\n".join(att.url for att in msg.attachments if att.url)
 			if toCopy:
 				api.copyToClip(toCopy)
 				ui.message("Copiado")
@@ -400,11 +440,84 @@ class AppModule(appModuleHandler.AppModule):
 				ui.message(msg.speechText(myName))
 		self._lastPress = (index, time.perf_counter(), presses, msg)
 
-	def _openMessageMenu(self, index):
-		log.info(f"teamsChat: menú del mensaje {index} solicitado")
-		msg, _chatList = self._locateMessage(index)
+	def _showMessageActions(self, index):
+		msg, chatList = self._locateMessage(index)
 		if msg is None:
 			return
+		myName = self._getMyName(chatList) if msg.quoteText is not None else self._myName
+		actions = self._buildActions(msg)
+		wx.CallAfter(self._runActionsDialog, msg.speechText(myName), actions)
+
+	def _buildActions(self, msg):
+		"""Lista de (etiqueta, función). Primero lo más probable:
+		la acción por defecto de cada adjunto y abrir cada enlace."""
+		default = config.conf[CONF_SECTION]["attachmentAction"]
+		first, middle, rest = [], [], []
+		for att in msg.attachments:
+			options = [("viewer", "abrir en el visor de Teams", partial(self._openInViewer, att))]
+			if att.url:
+				options += [
+					("browser", "abrir en el navegador", partial(_openUrl, att.url)),
+					("download", "descargar", partial(_openUrl, _downloadUrl(att.url))),
+				]
+			for key, label, func in options:
+				(first if key == default else rest).append((f"Adjunto: {att.name} - {label}", func))
+			if att.url:
+				rest.append((
+					f"Adjunto: {att.name} - copiar dirección",
+					partial(self._copy, att.url, "Dirección copiada"),
+				))
+		for text, url in msg.links:
+			first.append((f"Enlace: {text} - abrir", partial(_openUrl, url)))
+			rest.append((f"Enlace: {text} - copiar dirección", partial(self._copy, url, "Dirección copiada")))
+		if msg.text:
+			middle.append(("Copiar texto", partial(self._copy, msg.text, "Copiado")))
+		middle.append(("Abrir menú de opciones de Teams", partial(self._openMessageMenu, msg)))
+		return first + middle + rest
+
+	def _runActionsDialog(self, summary, actions):
+		gui.mainFrame.prePopup()
+		dialog = MessageActionsDialog(gui.mainFrame, summary, [label for label, _func in actions])
+		result = dialog.ShowModal()
+		selection = dialog.actionsList.GetSelection()
+		dialog.Destroy()
+		gui.mainFrame.postPopup()
+		if result == wx.ID_OK and selection != wx.NOT_FOUND:
+			# Dar tiempo a que el foco vuelva a Teams antes de actuar sobre él.
+			wx.CallLater(300, self._runAction, *actions[selection])
+
+	def _runAction(self, label, func):
+		log.info(f"teamsChat: acción {label!r}")
+		try:
+			func()
+		except Exception:
+			log.error(f"teamsChat: falló la acción {label!r}", exc_info=True)
+			ui.message("No se pudo completar la acción")
+
+	def _copy(self, text, confirmation):
+		api.copyToClip(text)
+		ui.message(confirmation)
+
+	def _openInViewer(self, att):
+		# Pulsar el adjunto como si se hiciera clic: primero el grupo del adjunto,
+		# después la sección que contiene su nombre y dirección.
+		withUrl = _findDescendant(att.obj, lambda o: bool(URL_RE.search(_name(o))), 6)
+		for candidate in (att.obj, withUrl):
+			if candidate is None:
+				continue
+			try:
+				candidate.doAction()
+				log.info(f"teamsChat: adjunto pulsado: {_name(candidate)[:60]!r}")
+				return
+			except Exception:
+				log.info("teamsChat: el adjunto no admite pulsación", exc_info=True)
+		if att.url:
+			ui.message("No se pudo abrir en el visor de Teams. Abriendo en el navegador.")
+			_openUrl(att.url)
+		else:
+			ui.message("No se pudo abrir el adjunto")
+
+	def _openMessageMenu(self, msg):
 		# Enfocar antes el mensaje: Teams solo muestra su barra de opciones
 		# cuando el mensaje tiene el foco o el ratón encima.
 		try:
@@ -454,9 +567,10 @@ for _i in range(10):
 		f"Lee el mensaje {_i} del chat ({_positionText(_i)}). Dos pulsaciones lo copian.",
 		lambda self, i=_i: self._readMessage(i),
 	))
-	setattr(AppModule, f"script_messageMenu{_i}", _makeScript(
-		f"messageMenu{_i}",
-		f"Abre el menú de opciones del mensaje {_i} del chat ({_positionText(_i)}).",
-		lambda self, i=_i: self._openMessageMenu(i),
+	setattr(AppModule, f"script_messageActions{_i}", _makeScript(
+		f"messageActions{_i}",
+		f"Muestra las acciones del mensaje {_i} del chat ({_positionText(_i)}): "
+		"copiar, menú de Teams, enlaces y adjuntos.",
+		lambda self, i=_i: self._showMessageActions(i),
 	))
 del _i
