@@ -255,6 +255,16 @@ def _sendKey(name):
 	KeyboardInputGesture.fromName(name).send()
 
 
+def _pressEnterOn(target):
+	"""Pulsa Intro solo si el foco sigue en target: si el usuario cambió de
+	ventana mientras esperábamos, Intro acabaría en otra aplicación."""
+	if api.getFocusObject() != target:
+		log.debug(f"teamsChat: el foco ya no está en {_name(target)!r}; no se pulsa Intro")
+		ui.message("Acción cancelada: el foco cambió")
+		return
+	_sendKey("enter")
+
+
 def _callLater(ms, func, *args):
 	"""wx.CallLater que registra los errores y avisa: los pasos diferidos
 	ya no están dentro del try de _runAction."""
@@ -534,7 +544,7 @@ class AppModule(appModuleHandler.AppModule):
 		# Igual que a mano: el adjunto se puede enfocar y su descripción dice
 		# "Presione Entrar para abrir el archivo".
 		att.obj.setFocus()
-		_callLater(FOCUS_DELAY_MS, _sendKey, "enter")
+		_callLater(FOCUS_DELAY_MS, _pressEnterOn, att.obj)
 
 	def _downloadAttachment(self, att):
 		# Igual que a mano: menú contextual del adjunto y opción "Descargar",
@@ -590,7 +600,7 @@ class AppModule(appModuleHandler.AppModule):
 		log.debug(f"teamsChat: eligiendo opción de menú {_name(item)!r}")
 		if item != focus:
 			item.setFocus()
-		_callLater(FOCUS_DELAY_MS, _sendKey, "enter")
+		_callLater(FOCUS_DELAY_MS, _pressEnterOn, item)
 
 	def _focusComposeBox(self):
 		box = self._findComposeBox()
