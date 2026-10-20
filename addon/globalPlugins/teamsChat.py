@@ -1,5 +1,6 @@
 # Teams Chat: panel de opciones en Preferencias > Opciones de NVDA.
 # Va en un plugin global para que el panel exista aunque Teams no esté abierto.
+# Copyright (C) 2026 Julio Villa. Distribuido bajo la GNU GPL versión 2 (ver LICENSE).
 
 import config
 import globalPluginHandler

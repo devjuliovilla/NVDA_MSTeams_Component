@@ -1,5 +1,6 @@
 # Teams Chat: módulo de aplicación para el nuevo Microsoft Teams (ms-teams.exe).
 # Solo se carga cuando Teams está activo, así que no afecta al resto de NVDA.
+# Copyright (C) 2026 Julio Villa. Distribuido bajo la GNU GPL versión 2 (ver LICENSE).
 
 import os
 import re

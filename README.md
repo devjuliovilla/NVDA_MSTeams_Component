@@ -105,6 +105,10 @@ Con el nivel de registro de NVDA en "depuración" (NVDA → Preferencias → Opc
 - El complemento solo lee lo que Teams ya muestra en pantalla. No envía nada a ningún servicio.
 - Solo abre direcciones `http` y `https`, nunca otros tipos de enlace que puedan llegar por un chat.
 
+## Licencia
+
+GNU General Public License versión 2 (GPL 2), la misma que NVDA. El texto completo está en el archivo [LICENSE](LICENSE).
+
 ## Autor
 
 Julio Villa.
