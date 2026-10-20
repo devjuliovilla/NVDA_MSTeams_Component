@@ -255,12 +255,14 @@ def _sendKey(name):
 	KeyboardInputGesture.fromName(name).send()
 
 
-def _pressEnterOn(target):
+def _pressEnterOn(target, onCancel=None):
 	"""Pulsa Intro solo si el foco sigue en target: si el usuario cambió de
 	ventana mientras esperábamos, Intro acabaría en otra aplicación."""
 	if api.getFocusObject() != target:
 		log.debug(f"teamsChat: el foco ya no está en {_name(target)!r}; no se pulsa Intro")
 		ui.message("Acción cancelada: el foco cambió")
+		if onCancel:
+			onCancel()
 		return
 	_sendKey("enter")
 
@@ -323,6 +325,20 @@ class AppModule(appModuleHandler.AppModule):
 		self._cachedDocName = None
 		# Última pulsación: (índice, momento en que terminó, nº de pulsaciones, mensaje).
 		self._lastPress = None
+		# Abrimos un menú y el usuario cambió de ventana antes de usarlo:
+		# los menús de Teams no se cierran solos, así que lo cerramos al volver.
+		self._closeMenuOnReturn = False
+
+	def event_appModule_gainFocus(self):
+		if self._closeMenuOnReturn:
+			self._closeMenuOnReturn = False
+			_callLater(FOCUS_DELAY_MS, self._closeLeftoverMenu)
+
+	def _closeLeftoverMenu(self):
+		focus = api.getFocusObject()
+		if _role(focus) == Role.MENUITEM and focus.appModule is self:
+			log.debug("teamsChat: cerrando el menú que quedó abierto")
+			_sendKey("escape")
 
 	def getScript(self, gesture):
 		script = super().getScript(gesture)
@@ -582,6 +598,12 @@ class AppModule(appModuleHandler.AppModule):
 	def _clickMenuItem(self, wanted, attemptsLeft):
 		"""Espera a que se abra el menú y elige la opción cuyo nombre empieza por wanted."""
 		focus = api.getFocusObject()
+		if focus is None or focus.appModule is not self:
+			# El usuario cambió de ventana con el menú ya pedido.
+			log.debug("teamsChat: Teams perdió el foco esperando el menú")
+			self._closeMenuOnReturn = True
+			ui.message("Acción cancelada: el foco cambió")
+			return
 		if _role(focus) != Role.MENUITEM:
 			if attemptsLeft > 0:
 				_callLater(MENU_POLL_MS, self._clickMenuItem, wanted, attemptsLeft - 1)
@@ -607,7 +629,15 @@ class AppModule(appModuleHandler.AppModule):
 		log.debug(f"teamsChat: eligiendo opción de menú {_name(item)!r}")
 		if item != focus:
 			item.setFocus()
-		_callLater(FOCUS_DELAY_MS, _pressEnterOn, item)
+		_callLater(FOCUS_DELAY_MS, _pressEnterOn, item, self._menuLeftOpen)
+
+	def _menuLeftOpen(self):
+		focus = api.getFocusObject()
+		if focus is not None and focus.appModule is self:
+			# Seguimos en Teams: si el menú sigue abierto, se cierra ya.
+			self._closeLeftoverMenu()
+		else:
+			self._closeMenuOnReturn = True
 
 	def _focusComposeBox(self):
 		box = self._findComposeBox()
