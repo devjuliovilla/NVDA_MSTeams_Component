@@ -37,7 +37,8 @@ MY_BODY_CLASS = "fui-ChatMyMessage__body"
 
 # Límites para no recorrer árboles enormes si Teams cambia su estructura.
 MAX_ANCESTOR_DEPTH = 60
-MAX_FALLBACK_NODES = 4000
+# Cada nodo cuesta ~0,7 ms; 1500 nodos ≈ 1 segundo como máximo.
+MAX_FALLBACK_NODES = 1500
 MAX_PANE_NODES = 1500
 MAX_TEXT_DEPTH = 15
 MAX_MY_NAME_SCAN = 30
@@ -49,6 +50,7 @@ REPEAT_WINDOW = 0.5
 FOCUS_DELAY_MS = 150
 MENU_POLL_MS = 100
 MENU_POLL_ATTEMPTS = 20
+FOCUS_POLL_ATTEMPTS = 10
 # Texto de la opción del menú contextual de un adjunto (Teams en español).
 DOWNLOAD_ITEM_NAME = "Descargar"
 
@@ -523,11 +525,30 @@ class AppModule(appModuleHandler.AppModule):
 		# Igual que a mano: menú contextual del adjunto y opción "Descargar",
 		# que Teams guarda directamente en la carpeta de descargas.
 		att.obj.setFocus()
-		wx.CallLater(FOCUS_DELAY_MS, _sendKey, "shift+f10")
-		wx.CallLater(FOCUS_DELAY_MS + MENU_POLL_MS, self._clickMenuItem, DOWNLOAD_ITEM_NAME, MENU_POLL_ATTEMPTS)
+		self._waitForFocus(att, FOCUS_POLL_ATTEMPTS)
+
+	def _waitForFocus(self, att, attemptsLeft):
+		"""Abre el menú contextual solo cuando el foco ya está en el adjunto:
+		si no, Mayúsculas+F10 puede abrir otro menú (por ejemplo, el de Sistema)."""
+		if api.getFocusObject() == att.obj:
+			_sendKey("shift+f10")
+			wx.CallLater(MENU_POLL_MS, self._clickMenuItem, DOWNLOAD_ITEM_NAME, MENU_POLL_ATTEMPTS)
+			return
+		if attemptsLeft > 0:
+			wx.CallLater(MENU_POLL_MS, self._waitForFocus, att, attemptsLeft - 1)
+			return
+		# El foco no llegó: usar el botón "Más acciones" del propio adjunto.
+		button = _findDescendant(att.obj, lambda o: _role(o) == Role.MENUBUTTON, 8)
+		if button is None:
+			log.info("teamsChat: el foco no llegó al adjunto y no tiene botón Más acciones")
+			ui.message("No se pudo abrir el menú del adjunto")
+			return
+		log.info(f"teamsChat: el foco no llegó al adjunto; uso el botón {_name(button)!r}")
+		button.doAction()
+		wx.CallLater(MENU_POLL_MS, self._clickMenuItem, DOWNLOAD_ITEM_NAME, MENU_POLL_ATTEMPTS)
 
 	def _clickMenuItem(self, wanted, attemptsLeft):
-		"""Espera a que se abra el menú y pulsa la opción cuyo nombre empieza por wanted."""
+		"""Espera a que se abra el menú y elige la opción cuyo nombre empieza por wanted."""
 		focus = api.getFocusObject()
 		if _role(focus) != Role.MENUITEM:
 			if attemptsLeft > 0:
@@ -543,17 +564,18 @@ class AppModule(appModuleHandler.AppModule):
 			3,
 		)
 		if item is None:
+			# Se abrió un menú que no es el del adjunto: cerrarlo para no dejarlo abierto.
 			names = [_name(o) for o in _children(menu)]
 			log.info(f"teamsChat: opción {wanted!r} no encontrada; menú: {names!r}")
-			ui.message(f"No se encontró la opción {wanted}. Elígela en el menú.")
+			_sendKey("escape")
+			ui.message(f"No se encontró la opción {wanted}")
 			return
-		log.info(f"teamsChat: pulsando opción de menú {_name(item)!r}")
-		try:
-			item.doAction()
-		except Exception:
-			log.info("teamsChat: doAction falló, uso Intro", exc_info=True)
+		# Igual que a mano: ir a la opción y pulsar Intro. Teams no siempre
+		# acepta la activación directa (doAction) igual que el teclado.
+		log.info(f"teamsChat: eligiendo opción de menú {_name(item)!r}")
+		if item != focus:
 			item.setFocus()
-			wx.CallLater(FOCUS_DELAY_MS, _sendKey, "enter")
+		wx.CallLater(FOCUS_DELAY_MS, _sendKey, "enter")
 
 	def _focusComposeBox(self):
 		box = self._findComposeBox()
