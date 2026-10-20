@@ -562,6 +562,13 @@ class AppModule(appModuleHandler.AppModule):
 		if attemptsLeft > 0:
 			_callLater(MENU_POLL_MS, self._waitForFocus, att, attemptsLeft - 1)
 			return
+		# El botón "Más acciones" funciona aunque Teams esté en segundo plano:
+		# si el usuario cambió de ventana, el menú se abriría detrás.
+		focus = api.getFocusObject()
+		if focus is None or focus.appModule is not self:
+			log.debug("teamsChat: Teams ya no tiene el foco; descarga cancelada")
+			ui.message("Acción cancelada: el foco cambió")
+			return
 		# El foco no llegó: usar el botón "Más acciones" del propio adjunto.
 		button = _findDescendant(att.obj, lambda o: _role(o) == Role.MENUBUTTON, 8)
 		if button is None:
