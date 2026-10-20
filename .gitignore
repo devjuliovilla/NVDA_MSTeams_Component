@@ -1,4 +1,5 @@
 user-instructions/
 dist/
+.claude/
 __pycache__/
 *.pyc

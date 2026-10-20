@@ -4,7 +4,7 @@ Complemento para el lector de pantalla [NVDA](https://www.nvaccess.org/) que fac
 
 Permite leer los últimos mensajes de un chat sin mover el foco ni buscarlos con el ratón, copiarlos y abrir sus enlaces y archivos adjuntos desde una ventana accesible.
 
-> Estado: en desarrollo (versión 0.1.4). Funcionan la lectura y la copia de mensajes, la ventana de acciones, los enlaces, el menú de opciones de Teams y abrir adjuntos en el navegador. Están en pruebas: abrir adjuntos en el visor de Teams, descargarlos y el atajo para ir al cuadro de redacción.
+> Versión 0.1.5. Probada con NVDA 2026.2 y Teams en español: lectura y copia de mensajes, ventana de acciones, enlaces, menú de opciones de Teams, adjuntos (visor, navegador, descarga y copiar dirección) y atajo al cuadro de redacción.
 
 ## Características
 
@@ -53,9 +53,13 @@ Se ha probado con la interfaz de Teams en español. El complemento localiza los 
 
 ## Instalación
 
-1. Genera el paquete (ver más abajo) o descarga el archivo `.nvda-addon`.
-2. Pulsa Intro sobre el archivo `teamsChat-<versión>.nvda-addon`.
+1. Descarga el archivo `teamsChat-<versión>.nvda-addon` de la sección [Releases](https://github.com/devjuliovilla/NVDA_MSTeams_Component/releases) del repositorio, o genera el paquete tú mismo (ver más abajo).
+2. Pulsa Intro sobre el archivo descargado.
 3. Acepta la instalación y reinicia NVDA.
+
+## Comentarios y errores
+
+Si algo no funciona o tienes una idea, abre una incidencia en la sección [Issues](https://github.com/devjuliovilla/NVDA_MSTeams_Component/issues) del repositorio. Si es posible, incluye las líneas del registro de NVDA (NVDA+F1) que empiezan por `teamsChat:`.
 
 ## Desarrollo
 
