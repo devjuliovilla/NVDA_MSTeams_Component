@@ -71,7 +71,6 @@ addon/
   appModules/ms-teams.py       Lógica principal; NVDA solo la carga cuando Teams está activo
   globalPlugins/teamsChat.py   Panel de opciones (disponible aunque Teams no esté abierto)
 build.ps1                      Empaqueta addon/ en dist/teamsChat-<versión>.nvda-addon
-ROADMAP.md                     Funciones pendientes e ideas
 ```
 
 ### Generar el paquete

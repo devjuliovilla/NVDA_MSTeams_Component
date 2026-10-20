@@ -1,5 +1,6 @@
 user-instructions/
 dist/
 .claude/
+ROADMAP.md
 __pycache__/
 *.pyc
