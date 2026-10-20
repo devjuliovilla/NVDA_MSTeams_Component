@@ -4,7 +4,7 @@ Complemento para el lector de pantalla [NVDA](https://www.nvaccess.org/) que fac
 
 Permite leer los últimos mensajes de un chat sin mover el foco ni buscarlos con el ratón, copiarlos y abrir sus enlaces y archivos adjuntos desde una ventana accesible.
 
-> Versión 0.1.5. Probada con NVDA 2026.2 y Teams en español: lectura y copia de mensajes, ventana de acciones, enlaces, menú de opciones de Teams, adjuntos (visor, navegador, descarga y copiar dirección) y atajo al cuadro de redacción.
+> Versión 0.1.6. Probada con NVDA 2026.2 y Teams en español: lectura y copia de mensajes, ventana de acciones, enlaces, menú de opciones de Teams, adjuntos (visor, navegador, descarga y copiar dirección) y atajo al cuadro de redacción.
 
 ## Características
 
@@ -49,7 +49,7 @@ En NVDA → Preferencias → Opciones → **Teams Chat**:
 - NVDA 2024.1 o posterior.
 - Nuevo Microsoft Teams de escritorio (`ms-teams.exe`). El Teams clásico y la versión web no están soportados.
 
-Se ha probado con la interfaz de Teams en español. El complemento localiza los mensajes por identificadores internos de Teams y no por textos, así que debería funcionar con otros idiomas, aunque sus propios mensajes están en español.
+Se ha probado con la interfaz de Teams en español. El complemento localiza los mensajes por identificadores internos de Teams y no por textos, así que la lectura de mensajes debería funcionar con otros idiomas. Dos excepciones: descargar adjuntos busca la opción "Descargar" del menú de Teams, así que de momento solo funciona con Teams en español, y los mensajes del propio complemento están en español.
 
 ## Instalación
 
@@ -59,7 +59,7 @@ Se ha probado con la interfaz de Teams en español. El complemento localiza los 
 
 ## Comentarios y errores
 
-Si algo no funciona o tienes una idea, abre una incidencia en la sección [Issues](https://github.com/devjuliovilla/NVDA_MSTeams_Component/issues) del repositorio. Si es posible, incluye las líneas del registro de NVDA (NVDA+F1) que empiezan por `teamsChat:`.
+Si algo no funciona o tienes una idea, abre una incidencia en la sección [Issues](https://github.com/devjuliovilla/NVDA_MSTeams_Component/issues) del repositorio. Si es posible, pon el registro de NVDA en nivel "depuración", repite el problema e incluye las líneas del registro (NVDA+F1) que empiezan por `teamsChat:`. Revisa antes que no contengan nada privado.
 
 ## Desarrollo
 
@@ -93,7 +93,7 @@ Teams es una aplicación web (WebView2) y NVDA la ve como un documento. El compl
 
 Las clases con nombres aleatorios de Teams (por ejemplo, `___1vlkg3r`) cambian con cada actualización, así que no se usan.
 
-Cada lectura anota en el registro de NVDA (NVDA+F1) cuánto ha tardado, en líneas que empiezan por `teamsChat:`.
+Con el nivel de registro de NVDA en "depuración" (NVDA → Preferencias → Opciones → General), cada lectura y cada acción se anotan en el registro (NVDA+F1) en líneas que empiezan por `teamsChat:`, con lo que ha tardado. En el nivel normal solo se anotan los errores, porque esas líneas pueden incluir nombres de archivos y textos del chat.
 
 ### Ramas
 

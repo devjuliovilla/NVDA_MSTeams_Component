@@ -4,7 +4,7 @@
 import os
 import re
 import time
-from collections import namedtuple
+from collections import deque, namedtuple
 from functools import partial
 
 import api
@@ -103,10 +103,10 @@ def _findDescendant(obj, predicate, maxDepth):
 
 def _findById(root, domId, maxNodes):
 	"""Búsqueda en anchura de un id, con un límite de nodos visitados."""
-	queue = [root]
+	queue = deque([root])
 	visited = 0
 	while queue and visited < maxNodes:
-		node = queue.pop(0)
+		node = queue.popleft()
 		visited += 1
 		if _domId(node) == domId:
 			return node
@@ -254,6 +254,18 @@ def _sendKey(name):
 	KeyboardInputGesture.fromName(name).send()
 
 
+def _callLater(ms, func, *args):
+	"""wx.CallLater que registra los errores y avisa: los pasos diferidos
+	ya no están dentro del try de _runAction."""
+	def run():
+		try:
+			func(*args)
+		except Exception:
+			log.error(f"teamsChat: falló el paso {func.__name__}", exc_info=True)
+			ui.message("No se pudo completar la acción")
+	wx.CallLater(ms, run)
+
+
 class MessageActionsDialog(wx.Dialog):
 	def __init__(self, parent, summary, labels):
 		super().__init__(parent, title="Acciones del mensaje")
@@ -373,6 +385,7 @@ class AppModule(appModuleHandler.AppModule):
 				if obj is not None and _domId(obj) == CHAT_LIST_ID:
 					return obj
 		except Exception:
+			# _iterNodesByAttribs es interno de NVDA: si cambia, seguimos con el recorrido.
 			log.debugWarning("teamsChat: búsqueda en el búfer fallida", exc_info=True)
 		return None
 
@@ -414,11 +427,11 @@ class AppModule(appModuleHandler.AppModule):
 		chatList, method = self._findChatList()
 		found = time.perf_counter()
 		if chatList is None:
-			log.info(f"teamsChat: lista no encontrada en {(found - start) * 1000:.0f} ms")
+			log.debug(f"teamsChat: lista no encontrada en {(found - start) * 1000:.0f} ms")
 			ui.message("No se encontró la lista de mensajes. Abre un chat.")
 			return None, None
 		msg, count = self._getMessage(chatList, index)
-		log.info(
+		log.debug(
 			f"teamsChat: mensaje {index}, buscar lista {(found - start) * 1000:.0f} ms ({method}), "
 			f"leer mensaje {(time.perf_counter() - found) * 1000:.0f} ms"
 		)
@@ -504,11 +517,12 @@ class AppModule(appModuleHandler.AppModule):
 			wx.CallLater(300, self._runAction, *actions[selection])
 
 	def _runAction(self, label, func):
-		log.info(f"teamsChat: acción {label!r}")
+		# Las etiquetas llevan nombres de archivo y textos del chat: solo en modo depuración.
+		log.debug(f"teamsChat: acción {label!r}")
 		try:
 			func()
 		except Exception:
-			log.error(f"teamsChat: falló la acción {label!r}", exc_info=True)
+			log.error("teamsChat: falló la acción del mensaje", exc_info=True)
 			ui.message("No se pudo completar la acción")
 
 	def _copy(self, text, confirmation):
@@ -519,7 +533,7 @@ class AppModule(appModuleHandler.AppModule):
 		# Igual que a mano: el adjunto se puede enfocar y su descripción dice
 		# "Presione Entrar para abrir el archivo".
 		att.obj.setFocus()
-		wx.CallLater(FOCUS_DELAY_MS, _sendKey, "enter")
+		_callLater(FOCUS_DELAY_MS, _sendKey, "enter")
 
 	def _downloadAttachment(self, att):
 		# Igual que a mano: menú contextual del adjunto y opción "Descargar",
@@ -532,29 +546,29 @@ class AppModule(appModuleHandler.AppModule):
 		si no, Mayúsculas+F10 puede abrir otro menú (por ejemplo, el de Sistema)."""
 		if api.getFocusObject() == att.obj:
 			_sendKey("shift+f10")
-			wx.CallLater(MENU_POLL_MS, self._clickMenuItem, DOWNLOAD_ITEM_NAME, MENU_POLL_ATTEMPTS)
+			_callLater(MENU_POLL_MS, self._clickMenuItem, DOWNLOAD_ITEM_NAME, MENU_POLL_ATTEMPTS)
 			return
 		if attemptsLeft > 0:
-			wx.CallLater(MENU_POLL_MS, self._waitForFocus, att, attemptsLeft - 1)
+			_callLater(MENU_POLL_MS, self._waitForFocus, att, attemptsLeft - 1)
 			return
 		# El foco no llegó: usar el botón "Más acciones" del propio adjunto.
 		button = _findDescendant(att.obj, lambda o: _role(o) == Role.MENUBUTTON, 8)
 		if button is None:
-			log.info("teamsChat: el foco no llegó al adjunto y no tiene botón Más acciones")
+			log.debug("teamsChat: el foco no llegó al adjunto y no tiene botón Más acciones")
 			ui.message("No se pudo abrir el menú del adjunto")
 			return
-		log.info(f"teamsChat: el foco no llegó al adjunto; uso el botón {_name(button)!r}")
+		log.debug(f"teamsChat: el foco no llegó al adjunto; uso el botón {_name(button)!r}")
 		button.doAction()
-		wx.CallLater(MENU_POLL_MS, self._clickMenuItem, DOWNLOAD_ITEM_NAME, MENU_POLL_ATTEMPTS)
+		_callLater(MENU_POLL_MS, self._clickMenuItem, DOWNLOAD_ITEM_NAME, MENU_POLL_ATTEMPTS)
 
 	def _clickMenuItem(self, wanted, attemptsLeft):
 		"""Espera a que se abra el menú y elige la opción cuyo nombre empieza por wanted."""
 		focus = api.getFocusObject()
 		if _role(focus) != Role.MENUITEM:
 			if attemptsLeft > 0:
-				wx.CallLater(MENU_POLL_MS, self._clickMenuItem, wanted, attemptsLeft - 1)
+				_callLater(MENU_POLL_MS, self._clickMenuItem, wanted, attemptsLeft - 1)
 			else:
-				log.info(f"teamsChat: no se abrió el menú; foco en {_role(focus)} {_name(focus)!r}")
+				log.debug(f"teamsChat: no se abrió el menú; foco en {_role(focus)} {_name(focus)!r}")
 				ui.message("No se abrió el menú del adjunto")
 			return
 		menu = focus.parent
@@ -566,16 +580,16 @@ class AppModule(appModuleHandler.AppModule):
 		if item is None:
 			# Se abrió un menú que no es el del adjunto: cerrarlo para no dejarlo abierto.
 			names = [_name(o) for o in _children(menu)]
-			log.info(f"teamsChat: opción {wanted!r} no encontrada; menú: {names!r}")
+			log.debug(f"teamsChat: opción {wanted!r} no encontrada; menú: {names!r}")
 			_sendKey("escape")
 			ui.message(f"No se encontró la opción {wanted}")
 			return
 		# Igual que a mano: ir a la opción y pulsar Intro. Teams no siempre
 		# acepta la activación directa (doAction) igual que el teclado.
-		log.info(f"teamsChat: eligiendo opción de menú {_name(item)!r}")
+		log.debug(f"teamsChat: eligiendo opción de menú {_name(item)!r}")
 		if item != focus:
 			item.setFocus()
-		wx.CallLater(FOCUS_DELAY_MS, _sendKey, "enter")
+		_callLater(FOCUS_DELAY_MS, _sendKey, "enter")
 
 	def _focusComposeBox(self):
 		box = self._findComposeBox()
@@ -589,12 +603,12 @@ class AppModule(appModuleHandler.AppModule):
 		fuera de la lista de mensajes."""
 		pane = self._findMessagePane()
 		if pane is None:
-			log.info("teamsChat: panel del chat no encontrado")
+			log.debug("teamsChat: panel del chat no encontrado")
 			return None
-		queue = [pane]
+		queue = deque([pane])
 		visited = 0
 		while queue and visited < MAX_PANE_NODES:
-			node = queue.pop(0)
+			node = queue.popleft()
 			visited += 1
 			if _domId(node) == CHAT_LIST_ID:
 				continue  # No recorrer los mensajes.
@@ -605,7 +619,7 @@ class AppModule(appModuleHandler.AppModule):
 			if State.EDITABLE in states and State.MULTILINE in states:
 				return node
 			queue.extend(_children(node))
-		log.info(f"teamsChat: cuadro de redacción no encontrado tras {visited} nodos")
+		log.debug(f"teamsChat: cuadro de redacción no encontrado tras {visited} nodos")
 		return None
 
 	def _findMessagePane(self):
@@ -629,24 +643,24 @@ class AppModule(appModuleHandler.AppModule):
 		try:
 			msg.body.setFocus()
 		except Exception:
-			log.info("teamsChat: no se pudo enfocar el mensaje", exc_info=True)
+			log.debugWarning("teamsChat: no se pudo enfocar el mensaje", exc_info=True)
 		# El botón "Más opciones de mensajes" es el primer botón dentro del cuerpo.
 		button = next((c for c in _children(msg.body) if _role(c) == Role.BUTTON), None)
 		if button is not None:
 			try:
 				button.doAction()
-				log.info(f"teamsChat: botón pulsado: {button.name!r}")
+				log.debug(f"teamsChat: botón pulsado: {button.name!r}")
 				return
 			except Exception:
-				log.info("teamsChat: no se pudo pulsar el botón de opciones", exc_info=True)
+				log.debugWarning("teamsChat: no se pudo pulsar el botón de opciones", exc_info=True)
 		else:
-			log.info("teamsChat: el mensaje no tiene botón de opciones")
+			log.debug("teamsChat: el mensaje no tiene botón de opciones")
 		# Alternativa: menú contextual con Mayúsculas+F10 sobre el mensaje enfocado.
 		try:
-			KeyboardInputGesture.fromName("shift+f10").send()
-			log.info("teamsChat: enviado Mayúsculas+F10")
+			_sendKey("shift+f10")
+			log.debug("teamsChat: enviado Mayúsculas+F10")
 		except Exception:
-			log.info("teamsChat: no se pudo abrir el menú del mensaje", exc_info=True)
+			log.error("teamsChat: no se pudo abrir el menú del mensaje", exc_info=True)
 			ui.message("No se pudo abrir el menú del mensaje")
 
 
