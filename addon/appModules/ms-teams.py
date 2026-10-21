@@ -513,21 +513,21 @@ class AppModule(appModuleHandler.AppModule):
 		first, middle, rest = [], [], []
 		for att in msg.attachments:
 			options = [
-				("viewer", "abrir en el visor de Teams", partial(self._openInViewer, att)),
-				("download", "descargar", partial(self._downloadAttachment, att)),
+				("viewer", "Abrir en el visor de Teams", partial(self._openInViewer, att)),
+				("download", "Descargar", partial(self._downloadAttachment, att)),
 			]
 			if att.url:
-				options.append(("browser", "abrir en el navegador", partial(_openUrl, att.url)))
+				options.append(("browser", "Abrir en el navegador", partial(_openUrl, att.url)))
 			for key, label, func in options:
-				(first if key == default else rest).append((f"Adjunto: {att.name} - {label}", func))
+				(first if key == default else rest).append((f"{label}: {att.name}", func))
 			if att.url:
 				rest.append((
-					f"Adjunto: {att.name} - copiar dirección",
+					f"Copiar dirección del adjunto: {att.name}",
 					partial(self._copy, att.url, "Dirección copiada"),
 				))
 		for text, url in msg.links:
-			first.append((f"Enlace: {text} - abrir", partial(_openUrl, url)))
-			rest.append((f"Enlace: {text} - copiar dirección", partial(self._copy, url, "Dirección copiada")))
+			first.append((f"Abrir enlace: {text}", partial(_openUrl, url)))
+			rest.append((f"Copiar dirección del enlace: {text}", partial(self._copy, url, "Dirección copiada")))
 		if msg.text:
 			middle.append(("Copiar texto", partial(self._copy, msg.text, "Copiado")))
 		middle.append(("Abrir menú de opciones de Teams", partial(self._openMessageMenu, msg)))
