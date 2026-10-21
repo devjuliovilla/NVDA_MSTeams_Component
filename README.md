@@ -4,7 +4,7 @@ Complemento para el lector de pantalla [NVDA](https://www.nvaccess.org/) que fac
 
 Permite leer los últimos mensajes de un chat sin mover el foco ni buscarlos con el ratón, copiarlos y abrir sus enlaces y archivos adjuntos desde una ventana accesible.
 
-> Versión 0.1.6. Probada con NVDA 2026.2 y Teams en español: lectura y copia de mensajes, ventana de acciones, enlaces, menú de opciones de Teams, adjuntos (visor, navegador, descarga y copiar dirección) y atajo al cuadro de redacción.
+> Versión 0.1.7. Probada con NVDA 2026.2 y Teams en español: lectura y copia de mensajes, respuestas con cita, ventana de acciones, enlaces, menú de opciones de Teams, adjuntos (visor, navegador, descarga y copiar dirección) y atajo al cuadro de redacción.
 
 ## Características
 
@@ -13,7 +13,7 @@ Permite leer los últimos mensajes de un chat sin mover el foco ni buscarlos con
 - **Respuestas con cita:** primero se dice a quién responde, luego el mensaje y al final la cita: "Respondiendo a Luis, Ana, de acuerdo, Mensaje citado: …". Si la cita es tuya se dice "Respondiendo a ti".
 - **Archivos adjuntos:** se anuncian al leer el mensaje: "Ana: te paso el informe. Adjunto: informe.pdf".
 - **Copiar un mensaje** pulsando su atajo dos veces seguidas. Si el mensaje solo tiene un adjunto, copia la dirección del archivo.
-- **Ventana de acciones del mensaje:** copiar el texto, abrir el menú de opciones de Teams, abrir o copiar enlaces, y abrir, descargar o copiar la dirección de los archivos adjuntos. La descarga usa el menú contextual del propio Teams, así que el archivo va directo a tu carpeta de descargas.
+- **Ventana de acciones del mensaje:** copiar el texto, abrir el menú de opciones de Teams, abrir o copiar enlaces, y abrir, descargar o copiar la dirección de los archivos adjuntos. Cada opción empieza por la acción ("Abrir enlace: …", "Descargar: informe.pdf"), para saber qué hace sin escuchar la dirección entera. La descarga usa el menú contextual del propio Teams, así que el archivo va directo a tu carpeta de descargas.
 - **Ir al cuadro de redacción** desde cualquier parte del chat con un atajo.
 - **Solo actúa en Teams.** En el resto de aplicaciones NVDA funciona exactamente igual que siempre.
 
