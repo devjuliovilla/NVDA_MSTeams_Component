@@ -163,14 +163,15 @@ class ChatMessage:
 			names = ", ".join(att.name for att in self.attachments)
 			label = "Adjunto" if len(self.attachments) == 1 else f"{len(self.attachments)} adjuntos"
 			parts.append(f"{label}: {names}")
-		speech = f"{author}: {'. '.join(parts) or 'mensaje sin texto'}"
-		if self.quoteText is not None:
-			if myName and self.quoteAuthor == myName:
-				speech += f". Mensaje citado tuyo: {self.quoteText}"
-			elif self.quoteAuthor:
-				speech += f". Mensaje citado de {self.quoteAuthor}: {self.quoteText}"
-			else:
-				speech += f". Mensaje citado: {self.quoteText}"
+		body = '. '.join(parts) or 'mensaje sin texto'
+		if self.quoteText is None:
+			return f"{author}: {body}"
+		# "Respondiendo a ti, Ana, de acuerdo, Mensaje citado: …"
+		speech = f"{author}, {body}, Mensaje citado: {self.quoteText}"
+		if myName and self.quoteAuthor == myName:
+			speech = f"Respondiendo a ti, {speech}"
+		elif self.quoteAuthor:
+			speech = f"Respondiendo a {self.quoteAuthor}, {speech}"
 		return speech
 
 

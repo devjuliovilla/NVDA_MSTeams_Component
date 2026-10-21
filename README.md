@@ -10,7 +10,7 @@ Permite leer los últimos mensajes de un chat sin mover el foco ni buscarlos con
 
 - **Leer mensajes con un atajo.** Alt+0 lee el último mensaje del chat abierto, Alt+1 el anterior y así hasta Alt+9, el décimo empezando por abajo. Funciona aunque el foco esté en el cuadro de redacción.
 - **Tus mensajes se leen como "Tú"**, sin repetir tu nombre.
-- **Respuestas con cita:** primero se lee el mensaje y después la cita: "Ana: de acuerdo. Mensaje citado de Luis: …".
+- **Respuestas con cita:** primero se dice a quién responde, luego el mensaje y al final la cita: "Respondiendo a Luis, Ana, de acuerdo, Mensaje citado: …". Si la cita es tuya se dice "Respondiendo a ti".
 - **Archivos adjuntos:** se anuncian al leer el mensaje: "Ana: te paso el informe. Adjunto: informe.pdf".
 - **Copiar un mensaje** pulsando su atajo dos veces seguidas. Si el mensaje solo tiene un adjunto, copia la dirección del archivo.
 - **Ventana de acciones del mensaje:** copiar el texto, abrir el menú de opciones de Teams, abrir o copiar enlaces, y abrir, descargar o copiar la dirección de los archivos adjuntos. La descarga usa el menú contextual del propio Teams, así que el archivo va directo a tu carpeta de descargas.
